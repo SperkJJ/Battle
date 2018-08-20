@@ -11,11 +11,12 @@ gym: 0.7.3
 """
 
 import numpy as np
-import pandas as pd
+#import pandas as pd
 import tensorflow as tf
+
 np.random.seed(1)
 tf.set_random_seed(1)
-
+NUM = 12
 
 # Deep Q Network off-policy
 class DeepQNetwork:
@@ -71,9 +72,10 @@ class DeepQNetwork:
 
     @staticmethod
     def deep_nn(inputs, scope_name):
-        map_ = inputs[:, :-12]
-        players = inputs[:, -12:]
-        map_ = tf.reshape(map_, (-1, 12, 12, 3))
+        map_ = inputs[:, :-4-8]
+        players = inputs[:, -4-8:]
+
+        map_ = tf.reshape(map_, (-1, NUM, NUM, 3))
         with tf.variable_scope(scope_name):
             # conv1
             map_ = tf.layers.conv2d(
@@ -83,7 +85,7 @@ class DeepQNetwork:
                 strides=2,
                 padding="same",
                 activation=tf.nn.relu,
-                kernel_initializer=tf.glorot_uniform_initializer())
+                kernel_initializer=tf.truncated_normal_initializer(stddev=0.1))
 
             # conv2
             map_ = tf.layers.conv2d(
@@ -93,7 +95,7 @@ class DeepQNetwork:
                 strides=1,
                 padding="same",
                 activation=tf.nn.relu,
-                kernel_initializer=tf.glorot_uniform_initializer())
+                kernel_initializer=tf.truncated_normal_initializer(stddev=0.1))
 
             # max_pooling1
             map_ = tf.layers.max_pooling2d(inputs=map_, pool_size=[2, 2], strides=2)
@@ -103,25 +105,25 @@ class DeepQNetwork:
 
             # map dense1
             map_ = tf.layers.dense(inputs=map_, units=64, activation=tf.nn.relu,
-                                   kernel_initializer=tf.glorot_uniform_initializer())
+                                   kernel_initializer=tf.truncated_normal_initializer(stddev=0.1))
 
             # player dense1
-            players = tf.layers.dense(inputs=players, units=128, activation=tf.nn.relu,
-                                      kernel_initializer=tf.glorot_uniform_initializer())
+            #players = tf.layers.dense(inputs=players, units=128, activation=tf.nn.relu,
+                                      #kernel_initializer=tf.truncated_normal_initializer(stddev=0.1))
 
             # player dense2
-            players = tf.layers.dense(inputs=players, units=64, activation=tf.nn.relu,
-                                      kernel_initializer=tf.glorot_uniform_initializer())
+            #players = tf.layers.dense(inputs=players, units=64, activation=tf.nn.relu,
+                                      #kernel_initializer=tf.truncated_normal_initializer(stddev=0.1))
 
             # aggregate
             out = tf.concat([map_, players], 1)
 
             # dense1
-            out = tf.layers.dense(inputs=out, units=256, activation=tf.nn.relu,
-                                  kernel_initializer=tf.glorot_uniform_initializer())
+            out = tf.layers.dense(inputs=out, units=64, activation=tf.nn.relu,
+                                  kernel_initializer=tf.truncated_normal_initializer(stddev=0.1))
 
             # out
-            out = tf.layers.dense(inputs=out, units=9, kernel_initializer=tf.glorot_uniform_initializer())
+            out = tf.layers.dense(inputs=out, units=9, kernel_initializer=tf.truncated_normal_initializer(stddev=1))
 
         return out
 
@@ -141,7 +143,7 @@ class DeepQNetwork:
         self.q_next = self.deep_nn(self.s_, 'target_net')
         tf.summary.scalar('loss', self.loss)
 
-    def store_transition(self, s, a, r, d, s_):
+    def store_transition(self, s, a,d, r, s_):
         if not hasattr(self, 'memory_counter'):
             self.memory_counter = 0
 
@@ -187,14 +189,15 @@ class DeepQNetwork:
 
         # change q_target w.r.t q_eval's action
         q_target = q_eval.copy()
-        done_batch = batch_memory[:, self.n_features + 2]
         batch_index = np.arange(self.batch_size, dtype=np.int32)
         eval_act_index = batch_memory[:, self.n_features].astype(int)
         reward = batch_memory[:, self.n_features + 1]
+        batch_index_done = batch_index[batch_memory[:, self.n_features + 2] > 0]
+        batch_index_not = batch_index[batch_memory[:, self.n_features + 2] == 0]
 
-        q_target[batch_index[done_batch == 0], eval_act_index[done_batch == 0]] \
-            = reward[done_batch == 0] + self.gamma * (np.max(q_next, axis=1)[done_batch == 0])
-        q_target[batch_index[done_batch != 0], eval_act_index[done_batch != 0]] = reward[done_batch != 0]
+        q_target[batch_index_not, eval_act_index[batch_index_not]] = reward[batch_index_not] + self.gamma * np.max(
+            q_next[batch_index_not], axis=1)
+        q_target[batch_index_done, eval_act_index[batch_index_done]] = reward[batch_index_done]
 
         """
         For example in this batch I have 2 samples and 3 actions:
@@ -234,7 +237,7 @@ class DeepQNetwork:
             summary = self.sess.run(self.merged, feed_dict={self.s: batch_memory[:, :self.n_features],
                                                             self.q_target: q_target})
             self.train_writer.add_summary(summary, self.learn_step_counter)
-            self.saver.save(self.sess, './new_log/my_test_model', global_step=self.learn_step_counter)
+            self.saver.save(self.sess, 'new_log/my_test_model', global_step=self.learn_step_counter)
 
         self.learn_step_counter += 1
 
