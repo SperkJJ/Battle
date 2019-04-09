@@ -40,6 +40,8 @@ int mian()
         }
     }
     
+    int mim = 0 ;
+    for (int j = 0 ; j< m;j++)
   
     return 0;
 }
