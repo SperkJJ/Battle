@@ -33,8 +33,9 @@ int mian()
         {
             if(m[j] > m[j+1])
             {
-                temp = m[j]
-            
+                temp = m[j];
+                m[j] = m[j+1];
+                m[j+1] = temp;
             }
         }
     }
